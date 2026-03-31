@@ -2,9 +2,6 @@
 
 **Ask questions across an entire GitHub organisation’s codebases** — with answers grounded in **your** repositories. This app ingests many repos, indexes code with **tree-sitter** and **embeddings**, stores vectors in **ChromaDB**, and uses **Google Gemini** in a **RAG** (retrieval-augmented generation) pipeline so responses can cite **repo, file, and line range**.
 
-**Upstream repo:** [github.com/shreyakhetan09/Developer-Knowledge-RAG](https://github.com/shreyakhetan09/Developer-Knowledge-RAG)
-
-> **Executive overview (non-technical / leadership):** see [`EXECUTIVE_SUMMARY.md`](EXECUTIVE_SUMMARY.md).
 
 ---
 
