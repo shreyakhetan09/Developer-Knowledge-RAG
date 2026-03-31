@@ -1,0 +1,6 @@
+.venv/
+chroma_data/
+index_state.json
+__pycache__/
+*.pyc
+.env
