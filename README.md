@@ -5,27 +5,6 @@ An **AI-assisted internal codebase search** demo: ingest a GitHub organisation�
 
 ---
 
-## Does it actually work?
-
-**Yes, when configured correctly** — it is a real pipeline, not a mock:
-
-| Layer | Status |
-|--------|--------|
-| **GitHub fetch** (PyGithub) | Works with a valid token and repo access. |
-| **Chunking** (tree-sitter) | Works; `tree-sitter` is pinned to **0.21.3** so it matches `tree-sitter-languages` (newer tree-sitter breaks the wheels). |
-| **Embeddings** (`text-embedding-004`) | Works with a valid **Google AI Studio / Gemini API** key. |
-| **Vector store** (Chroma) | Persists under `./chroma_data/`. |
-| **Chat / modes** (Gemini) | Works; set `GEMINI_CHAT_MODEL` if Google renames or deprecates a model ID. |
-| **Webhook** (FastAPI) | Works if GitHub can reach your URL and you set `GITHUB_WEBHOOK_SECRET` for production verification. |
-
-**Caveats (honest):**
-
-- You need **real API keys** and **network**; free tiers have **rate limits** — large org ingests may need smaller “max repos” in the UI or pauses.
-- **`google-generativeai` is deprecated** in favour of `google.genai`; this project still uses the older package — plan a migration when you harden for production.
-- **Python 3.10+** is recommended; 3.9 may work but triggers deprecation warnings.
-- **Answer quality** depends on retrieval (chunk coverage, query wording) and the model — always treat critical decisions as **human-reviewed**.
-
----
 
 ## What it does
 
