@@ -2,7 +2,6 @@
 
 An **AI-assisted internal codebase search** demo: ingest a GitHub organisation’s repositories, index code with **tree-sitter** chunks and **embeddings**, store vectors in **ChromaDB**, and chat with **Google Gemini** using **retrieval-augmented generation (RAG)** so answers can cite **repo, file, and line range**.
 
-**Repository:** [github.com/shreyakhetan09/Developer-Knowledge-RAG](https://github.com/shreyakhetan09/Developer-Knowledge-RAG)
 
 ---
 
