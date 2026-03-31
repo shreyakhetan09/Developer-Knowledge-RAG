@@ -1,0 +1,10 @@
+---
+description: Never push to git remotes without explicit post-review approval
+alwaysApply: true
+---
+
+# Git — no push without review
+
+- **Do not** run `git push`, `git push --force`, `gh repo sync`, or any command that **publishes to a remote** (GitHub, GitLab, etc.) unless the user has **explicitly approved after reviewing** the changes (diff, commits, branch, remote).
+- **Allowed without asking to push:** local `git status`, `git diff`, `git add`, `git commit` on request, showing proposed commands, or preparing a PR description — **stop before any remote update** and wait for clear approval (e.g. “push now” after they reviewed).
+- If the user once said “push” in an older message, **do not assume** that applies to later work; ask or wait for **fresh** approval for each push unless they state a standing exception for that session.

@@ -15,6 +15,7 @@ from codebase_assistant.github_client import (
 )
 from codebase_assistant.state_store import touch_org_index, touch_repo_index
 from codebase_assistant import vector_store
+from codebase_assistant import graph_index
 
 
 def _noop_progress(msg: str) -> None:
@@ -69,6 +70,20 @@ def ingest_paths(
     vector_store.upsert_chunks(ids, docs, embeddings, metas)
     touch_repo_index(repo_full_name)
     cb(f"Indexed {len(ids)} chunks for {len(paths)} file(s) in {repo_full_name}")
+
+    # Relationship graph (partial file update)
+    known = vector_store.list_indexed_repos() or [repo_full_name]
+    g = graph_index.load_graph()
+    for path in paths:
+        if not should_index_path(path):
+            continue
+        graph_index.strip_file_from_graph(g, repo_full_name, path)
+        text = fetch_text_file(repo, path, ref=branch)
+        if text is None:
+            continue
+        graph_index.apply_file_to_graph(g, repo_full_name, path, text, known)
+    graph_index.save_graph(g)
+
     return len(ids)
 
 
@@ -78,6 +93,7 @@ def ingest_repo(
     *,
     replace_repo: bool = True,
     progress: ProgressCb | None = None,
+    known_repos: list[str] | None = None,
 ) -> int:
     """
     Ingest one repository. If repo_slug is None, org_or_full must be 'org/repo' full name.
@@ -91,7 +107,12 @@ def ingest_repo(
 
     if replace_repo:
         vector_store.delete_by_repo(full_name)
+        graph_index.remove_repo(full_name)
         cb(f"Cleared existing index for {full_name}")
+
+    known_full = list(known_repos) if known_repos is not None else vector_store.list_indexed_repos()
+    if full_name not in known_full:
+        known_full = known_full + [full_name]
 
     paths = list(iter_indexable_blob_paths(repo, ref=branch))
     cb(f"Found {len(paths)} indexable files in {full_name}")
@@ -102,6 +123,7 @@ def ingest_repo(
     batch_docs: list[str] = []
     batch_ids: list[str] = []
     batch_metas: list[dict] = []
+    g = graph_index.load_graph()
 
     def flush_batch() -> None:
         nonlocal batch_docs, batch_ids, batch_metas
@@ -118,6 +140,7 @@ def ingest_repo(
         text = fetch_text_file(repo, path, ref=branch)
         if text is None:
             continue
+        graph_index.apply_file_to_graph(g, full_name, path, text, known_full)
         chunks, language = chunk_source(path, text)
         for ch in chunks:
             cid = stable_chunk_id(
@@ -139,6 +162,7 @@ def ingest_repo(
                 flush_batch()
 
     flush_batch()
+    graph_index.save_graph(g)
     touch_repo_index(full_name)
     cb(f"Done {full_name}: {len(ids)} chunks")
     return len(ids)
@@ -154,6 +178,7 @@ def ingest_org(
     refs = list_org_repos(org_name)
     if max_repos is not None:
         refs = refs[:max_repos]
+    org_known = [r.full_name for r in refs]
     counts: dict[str, int] = {}
     for ref in refs:
         try:
@@ -161,6 +186,7 @@ def ingest_org(
                 ref.full_name,
                 replace_repo=True,
                 progress=cb,
+                known_repos=org_known,
             )
         except Exception as e:
             cb(f"ERROR {ref.full_name}: {e}")

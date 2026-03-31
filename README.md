@@ -1,40 +1,95 @@
 # Developer Knowledge RAG
 
-An **AI-assisted internal codebase search** demo: ingest a GitHub organisation’s repositories, index code with **tree-sitter** chunks and **embeddings**, store vectors in **ChromaDB**, and chat with **Google Gemini** using **retrieval-augmented generation (RAG)** so answers can cite **repo, file, and line range**.
+**Ask questions across an entire GitHub organisation’s codebases** — with answers grounded in **your** repositories. This app ingests many repos, indexes code with **tree-sitter** and **embeddings**, stores vectors in **ChromaDB**, and uses **Google Gemini** in a **RAG** (retrieval-augmented generation) pipeline so responses can cite **repo, file, and line range**.
 
+**Upstream repo:** [github.com/shreyakhetan09/Developer-Knowledge-RAG](https://github.com/shreyakhetan09/Developer-Knowledge-RAG)
 
----
-
-
-## What it does
-
-1. **Multi-repo ingestion** — Organisation name → list repos → walk indexable files → chunk → embed → upsert into Chroma.
-2. **Scoped search** — Natural language queries; optional phrasing like `only in repo-name` to filter by repository metadata.
-3. **Chat with memory** — Session history in Streamlit for follow-up questions.
-4. **Onboarding mode** — “Generate system overview” produces a structured Markdown report from cross-repo retrieval.
-5. **Incident mode** — Stronger triage-style prompts plus recent **per-file commits** via GitHub when a token is set.
-6. **PR diff reviewer** — Paste a unified diff; retrieval finds related indexed code; Gemini returns risks / tests / impact.
-7. **Webhook** — On push to the default branch, re-index **only changed files** (and remove chunks for deleted paths).
+> **Executive overview (non-technical / leadership):** see [`EXECUTIVE_SUMMARY.md`](EXECUTIVE_SUMMARY.md).
 
 ---
 
-## Architecture (short)
+## Table of contents
+
+- [Why this exists](#why-this-exists)
+- [Why RAG (not “just ChatGPT”)](#why-rag-not-just-chatgpt)
+- [Features](#features)
+- [Stack](#stack)
+- [How it works (short)](#how-it-works-short)
+- [Prerequisites](#prerequisites)
+- [Quick start](#quick-start)
+- [Configuration](#configuration)
+- [Running the app](#running-the-app)
+- [Webhook (optional)](#webhook-optional)
+- [Data on disk](#data-on-disk)
+- [Project layout](#project-layout)
+- [Security & limitations](#security--limitations)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
+
+---
+
+## Why this exists
+
+Engineers joining a company with **dozens of microservices and repos** spend a long time mapping **where** things live. A ticket often spans **multiple services** you have not opened yet. This tool **shortens the path from question to relevant files** by searching **semantically** across indexed code and returning **citation-backed** answers — plus modes for **onboarding**, **incidents**, and **PR review**.
+
+---
+
+## Why RAG (not “just ChatGPT”)?
+
+A plain LLM does **not** know your **private** monorepo or org unless you paste code repeatedly. **RAG** first **retrieves** the most relevant chunks from **your index**, then asks the model to answer using that context. That reduces blind hallucination and ties explanations to **real paths and lines** in your codebase.
+
+---
+
+## Features
+
+| Feature | Description |
+|--------|-------------|
+| **Multi-repo ingest** | Ingest a whole GitHub **org** or **re-ingest one repo** without rebuilding everything else. |
+| **Syntax-aware chunks** | **tree-sitter** splits by functions/classes (and module gaps), not fixed character windows. |
+| **Cross-repo chat** | Natural-language Q&A over all indexed repos; optional scoping (e.g. “only in `my-service`”). |
+| **Citations** | Prompts encourage **repo + path + line range** so claims are checkable. |
+| **Session memory** | Streamlit keeps conversation context for follow-ups. |
+| **System overview** | One-shot structured Markdown report for **onboarding** (multi-query retrieval + synthesis). |
+| **Incident mode** | Triage-style answers + **recent commits** on retrieved files (GitHub API). |
+| **PR diff review** | Paste a unified diff; retrieval surfaces related code; structured risks / tests / impact. |
+| **Webhook refresh** | On push to the **default branch**, re-index **only changed files** (FastAPI). |
+| **Relationship graph** | Heuristic `graph_data.json`: manifest deps, Python import hints, same-file **Python** call edges — **not** a full compiler graph. |
+
+---
+
+## Stack
+
+| Layer | Technology |
+|--------|------------|
+| UI | **Streamlit** |
+| Vector DB | **ChromaDB** (local, persistent) |
+| Embeddings | Google **`text-embedding-004`** |
+| LLM | **Gemini** (default `gemini-1.5-flash`, overridable) |
+| Code parsing | **tree-sitter** + **tree-sitter-languages** (pinned; see caveats) |
+| GitHub | **PyGithub** (REST API) |
+| Webhook API | **FastAPI** + **uvicorn** |
+| Config | **python-dotenv** |
+
+---
+
+## How it works (short)
 
 ```
-GitHub (PyGithub) → tree-sitter chunks → embeddings (Gemini) → ChromaDB
-                                              ↑
-User question → embed → similarity search → Gemini + citations → Streamlit
+GitHub API → fetch files → tree-sitter chunks → embed → ChromaDB
+                ↘ heuristics → graph_data.json (optional relationships)
+
+User question → embed → similarity search (top-k) → Gemini + history → answer + citations
 ```
 
-State file `./index_state.json` stores **last indexed** timestamps per repo (alongside Chroma).
+**Modes** (onboarding / incident / PR) use the **same index**; they differ in **retrieval settings** and **system prompts**, not in separate databases.
 
 ---
 
 ## Prerequisites
 
-- **Python 3.10+** recommended (3.9 may work).
-- **Google AI API key** — [Google AI Studio](https://aistudio.google.com/) (Gemini + embeddings).
-- **GitHub token** — Classic PAT with at least **`repo`** (private repos) or **`public_repo`** (public only), for ingestion and incident commit lookups.
+- **Python 3.10+** recommended (3.9 may work with warnings).
+- **[Google AI Studio](https://aistudio.google.com/) API key** — Gemini + embeddings.
+- **GitHub [personal access token](https://github.com/settings/tokens)** — `repo` (private) or `public_repo` (public only), for file trees, contents, and incident commits.
 
 ---
 
@@ -45,55 +100,75 @@ git clone https://github.com/shreyakhetan09/Developer-Knowledge-RAG.git
 cd Developer-Knowledge-RAG
 
 python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
 cp .env.example .env
-# Edit .env: GOOGLE_API_KEY, GITHUB_TOKEN, optional GITHUB_ORG
+# Set GOOGLE_API_KEY and GITHUB_TOKEN (see below)
 ```
-
-Run the UI:
 
 ```bash
 streamlit run streamlit_app.py
 ```
 
-1. Set the **GitHub organisation** in the sidebar (e.g. `tiangolo` for a public demo).
-2. Use **Ingest entire org** with a **low max repos** first to avoid rate limits.
-3. Ask questions in the chat; use **Generate system overview** or **Incident mode** / **PR diff** as needed.
+1. Enter a **GitHub organisation** (try a public multi-repo org, e.g. `tiangolo`, with a **low max repos** first).
+2. Click **Ingest entire org** or **Re-ingest one repo**.
+3. Chat, or use **Generate system overview**, **Incident mode**, or **PR diff reviewer**.
 
 ---
 
-## Environment variables
+## Configuration
+
+Create `.env` (or export variables). Example in [`.env.example`](.env.example):
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `GOOGLE_API_KEY` | Yes | Gemini chat + `text-embedding-004` |
-| `GITHUB_TOKEN` | Yes for ingest / incident | Clone metadata, file contents, commits |
-| `GITHUB_ORG` | No | Default org name in the UI |
-| `GITHUB_WEBHOOK_SECRET` | No (recommended for webhooks) | HMAC verification of `X-Hub-Signature-256` |
+| `GOOGLE_API_KEY` | **Yes** | Embeddings + chat |
+| `GITHUB_TOKEN` | **Yes** for ingest / incident | API access to repos and commits |
+| `GITHUB_ORG` | No | Default org in the UI |
+| `GITHUB_WEBHOOK_SECRET` | No (use in prod webhooks) | Verifies `X-Hub-Signature-256` |
 | `GEMINI_CHAT_MODEL` | No | Default: `gemini-1.5-flash` |
-
-Copy from `.env.example` and fill in values.
 
 ---
 
-## Webhook server (optional)
+## Running the app
 
-Re-ingest on merge to `main` (or the repo default branch):
+**Main UI (required for interactive use):**
+
+```bash
+streamlit run streamlit_app.py
+```
+
+**Webhook service (separate terminal, optional):**
 
 ```bash
 uvicorn codebase_assistant.webhook_app:app --host 0.0.0.0 --port 8765
 ```
 
-In GitHub: **Settings → Webhooks → Add webhook**
+Expose `https://<host>/webhook` to GitHub only if you need **automatic** re-indexing after merges.
 
-- **Payload URL:** `https://<your-host>/webhook`
-- **Content type:** `application/json`
-- **Events:** Push (or let it send pushes only to the default branch via your hosting rules)
-- **Secret:** same value as `GITHUB_WEBHOOK_SECRET`
+---
 
-If the secret is unset, the app logs a warning and **does not verify** signatures (development only).
+## Webhook (optional)
+
+1. Run the FastAPI app (see above).
+2. In GitHub: **Settings → Webhooks → Add webhook**
+   - **URL:** `https://<your-host>/webhook`
+   - **Content type:** `application/json`
+   - **Secret:** must match `GITHUB_WEBHOOK_SECRET`
+   - **Events:** Push (to your default branch)
+
+If `GITHUB_WEBHOOK_SECRET` is unset, the server **accepts unsigned payloads** and logs a warning — **development only**.
+
+---
+
+## Data on disk
+
+| Path | Contents |
+|------|----------|
+| `chroma_data/` | Chroma persistence (gitignored) |
+| `index_state.json` | Per-repo **last indexed** timestamps for the UI (gitignored) |
+| `graph_data.json` | Relationship graph (optional to commit; may contain paths/names) |
 
 ---
 
@@ -101,26 +176,43 @@ If the secret is unset, the app logs a warning and **does not verify** signature
 
 | Path | Role |
 |------|------|
-| `streamlit_app.py` | UI: chat, ingest, overview, incident, PR review, source viewer |
+| `streamlit_app.py` | Chat UI, ingest controls, overview, incident, PR review, graph viewer |
+| `codebase_assistant/config.py` | Paths, models, `TOP_K_*` |
 | `codebase_assistant/chunker.py` | tree-sitter chunking |
-| `codebase_assistant/embeddings.py` | Embedding API |
-| `codebase_assistant/vector_store.py` | Chroma helpers |
-| `codebase_assistant/github_client.py` | PyGithub + query scoping |
-| `codebase_assistant/ingestion.py` | Org / single-repo / path ingest |
-| `codebase_assistant/rag_engine.py` | Retrieval + Gemini prompts |
-| `codebase_assistant/webhook_app.py` | FastAPI `/webhook` |
-| `chroma_data/` | Created at runtime (gitignored) |
-| `index_state.json` | Last-indexed timestamps (gitignored) |
+| `codebase_assistant/embeddings.py` | Embedding API calls |
+| `codebase_assistant/vector_store.py` | Chroma upsert/query/delete |
+| `codebase_assistant/github_client.py` | Org repos, trees, file fetch, scoping, commits |
+| `codebase_assistant/ingestion.py` | Org / single-repo / webhook path ingest |
+| `codebase_assistant/rag_engine.py` | Retrieval + Gemini prompts (modes) |
+| `codebase_assistant/state_store.py` | `index_state.json` |
+| `codebase_assistant/graph_index.py` | `graph_data.json` heuristics |
+| `codebase_assistant/webhook_app.py` | `POST /webhook`, `GET /healthz` |
+
+---
+
+## Security & limitations
+
+- **Secrets:** Never commit `.env` or tokens. Treat **`chroma_data/`**, **`graph_data.json`**, and **indexed text** as sensitive (they can contain internal code or config).
+- **Streamlit** has **no built-in auth** — do not expose publicly without a gateway (SSO, VPN, OAuth proxy).
+- **Answers** can still be wrong — use citations to **verify**; critical changes need human review.
+- **Rate limits:** Google and GitHub free tiers limit bulk ingests; start with **few repos**.
+- **SDK:** `google-generativeai` is **deprecated** in favour of `google.genai` — plan a migration for production.
+- **tree-sitter:** `requirements.txt` pins **`tree-sitter==0.21.3`** — newer versions break `tree-sitter-languages` wheels until upgraded together.
 
 ---
 
 ## Troubleshooting
 
-| Issue | What to try |
-|--------|-------------|
-| `401` / auth errors from GitHub | Regenerate PAT; check org/repo access. |
-| Embedding or chat errors from Google | Confirm billing/API enablement; try another `GEMINI_CHAT_MODEL`. |
-| Empty or bad chunks | Reduce repos; check default branch name; some files are skipped (binaries, `node_modules`, etc.). |
-| tree-sitter errors | Keep `tree-sitter==0.21.3` as in `requirements.txt`. |
+| Symptom | What to try |
+|---------|-------------|
+| GitHub `401` / `404` | Token scopes; org/repo access; SSO authorization for the org |
+| Google API errors | Key valid; model name (`GEMINI_CHAT_MODEL`); [current pricing/limits](https://ai.google.dev/gemini-api/docs/pricing) |
+| Empty retrieval | Ingest completed? Try broader questions; increase coverage by indexing more repos |
+| Import / parse errors | Keep pinned `tree-sitter` versions; see `requirements.txt` |
+| Webhook ignored | Push must be to **default branch**; URL reachable; secret matches |
 
+---
 
+## License
+
+Add a `LICENSE` file if you redistribute or need explicit terms.

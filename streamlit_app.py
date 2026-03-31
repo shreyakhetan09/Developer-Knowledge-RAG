@@ -37,6 +37,7 @@ from codebase_assistant.vector_store import (
     format_citation,
     list_indexed_repos,
 )
+from codebase_assistant import graph_index
 
 st.set_page_config(page_title="Enterprise Codebase Assistant", layout="wide")
 
@@ -187,6 +188,30 @@ with col_main:
             file_name=f"{org}-system-overview.md",
             mime="text/markdown",
         )
+
+    st.divider()
+    with st.expander("Internal relationship graph (repo deps + Python call hints)", expanded=False):
+        st.caption(
+            "Built during ingest: manifest deps (requirements/pyproject/package.json/go.mod), "
+            "import hints matched to repo names, and same-file Python function calls. "
+            "Stored in `graph_data.json`. Not a full cross-repo call graph."
+        )
+        if not known_repos:
+            st.info("Ingest repos first.")
+        else:
+            gr = st.selectbox("Focus repo", known_repos, key="graph_repo")
+            s = graph_index.summarize_for_repo(gr)
+            st.metric("Total graph nodes", s["total_nodes"])
+            st.metric("Total graph edges", s["total_edges"])
+            st.metric("Intra-file `calls` edges", s["intra_file_call_edges"])
+            st.markdown("**Related repos (from manifests / imports):**")
+            if s["related_repos"]:
+                for r in s["related_repos"]:
+                    st.markdown(f"- `{r}`")
+            else:
+                st.caption("None detected yet — run org ingest so package names align with repo slugs.")
+            st.markdown("**Repo dependency diagram (Mermaid)**")
+            st.code(graph_index.to_mermaid_repo_deps(), language="mermaid")
 
     st.divider()
     with st.expander("PR diff reviewer", expanded=False):
