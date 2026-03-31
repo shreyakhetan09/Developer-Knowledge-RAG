@@ -1,6 +1,6 @@
 # Developer Knowledge RAG
+Developer Knowledge RAG is a syntax aware retrieval augmented generation system that turns your entire multi repo GitHub organisation into a semantic search and question answering layer for engineers. It uses tree sitter AST parsing for structural chunking of functions classes and modules, stores text embedding zero zero four vectors in a Chroma vector database, and queries Gemini to produce source grounded citation backed answers instead of hallucinations. Organisation wide ingestion together with incremental re indexing driven by GitHub webhooks enables cross repo reasoning for onboarding incident triage and pull request impact analysis so developers get a fast trustworthy way to navigate overwhelming codebases.
 
-**Ask questions across an entire GitHub organisation’s codebases** — with answers grounded in **your** repositories. This app ingests many repos, indexes code with **tree-sitter** and **embeddings**, stores vectors in **ChromaDB**, and uses **Google Gemini** in a **RAG** (retrieval-augmented generation) pipeline so responses can cite **repo, file, and line range**.
 
 
 ---
