@@ -123,8 +123,4 @@ If the secret is unset, the app logs a warning and **does not verify** signature
 | Empty or bad chunks | Reduce repos; check default branch name; some files are skipped (binaries, `node_modules`, etc.). |
 | tree-sitter errors | Keep `tree-sitter==0.21.3` as in `requirements.txt`. |
 
----
 
-## License
-
-Add a `LICENSE` file if you need a formal licence for your use case.
