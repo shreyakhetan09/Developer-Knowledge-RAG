@@ -31,7 +31,7 @@ Engineers joining a company with **dozens of microservices and repos** spend a l
 
 ---
 
-## Why RAG (not “just ChatGPT”)?
+## Why RAG ?
 
 A plain LLM does **not** know your **private** monorepo or org unless you paste code repeatedly. **RAG** first **retrieves** the most relevant chunks from **your index**, then asks the model to answer using that context. That reduces blind hallucination and ties explanations to **real paths and lines** in your codebase.
 
