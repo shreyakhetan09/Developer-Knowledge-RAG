@@ -1,7 +1,20 @@
 # Developer Knowledge RAG
-Developer Knowledge RAG is a syntax aware retrieval augmented generation system that turns your entire multi repo GitHub organisation into a semantic search and question answering layer for engineers. It uses tree sitter AST parsing for structural chunking of functions classes and modules, stores text embedding zero zero four vectors in a Chroma vector database, and queries Gemini to produce source grounded citation backed answers instead of hallucinations. Organisation wide ingestion together with incremental re indexing driven by GitHub webhooks enables cross repo reasoning for onboarding incident triage and pull request impact analysis so developers get a fast trustworthy way to navigate overwhelming codebases.
 
+A **syntax-aware retrieval system** over a GitHub organisation. Tree-sitter
+chunks functions and classes, **Chroma** stores `text-embedding-004` vectors,
+and **Gemini** answers with **repo + path + line citations** instead of
+guessing from training data.
 
+**Use case.** Onboarding, incident triage, and PR impact analysis when the
+answer lives across several microservices you have not opened yet.
+
+<p>
+  <img alt="Python" src="https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white" />
+  <img alt="Streamlit" src="https://img.shields.io/badge/Streamlit-FF4B4B?style=flat&logo=streamlit&logoColor=white" />
+  <img alt="Chroma" src="https://img.shields.io/badge/Chroma-FC8181?style=flat" />
+  <img alt="Gemini" src="https://img.shields.io/badge/Gemini-8E75B2?style=flat&logo=googlegemini&logoColor=white" />
+  <img alt="tree-sitter" src="https://img.shields.io/badge/tree--sitter-43853D?style=flat" />
+</p>
 
 ---
 
@@ -71,11 +84,18 @@ A plain LLM does **not** know your **private** monorepo or org unless you paste 
 
 ## How it works (short)
 
-```
-GitHub API → fetch files → tree-sitter chunks → embed → ChromaDB
-                ↘ heuristics → graph_data.json (optional relationships)
-
-User question → embed → similarity search (top-k) → Gemini + history → answer + citations
+```mermaid
+flowchart LR
+    GH["GitHub org"] --> F["Fetch files"]
+    F --> T["tree-sitter chunks<br/>functions / classes"]
+    T --> E["text-embedding-004"]
+    E --> C[("Chroma")]
+    T --> G["graph_data.json<br/>imports + deps"]
+    Q["Question"] --> E2["embed query"]
+    E2 --> C
+    C --> R["top-k chunks"]
+    R --> M["Gemini"]
+    M --> A["Answer + citations"]
 ```
 
 **Modes** (onboarding / incident / PR) use the **same index**; they differ in **retrieval settings** and **system prompts**, not in separate databases.
